@@ -4,55 +4,26 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
-	"sort"
-	"strings"
+	"path/filepath"
+
+	"github.com/jessevdk/go-flags"
 
 	"github.com/phayes/checkstyle"
 )
 
-type absolutePathCache struct {
-	paths []string
-	cache map[string]string
+var opts struct {
+	BaseDir string `short:"b" long:"basedir" description:"base directory"`
 }
 
-func newAbsolutePathCache(paths []string) *absolutePathCache {
-	sorted := make([]string, len(paths))
-	copy(sorted, paths)
-
-	sort.Slice(sorted, func(i, j int) bool {
-		a, b := paths[i], paths[j]
-		if len(a) > len(b) {
-			return true
-		}
-		if len(a) < len(b) {
-			return false
-		}
-		return strings.Compare(a, b) > 0
-	})
-
-	return &absolutePathCache{sorted, make(map[string]string)}
-}
-
-func (a *absolutePathCache) find(relative string) string {
-	res, exist := a.cache[relative]
-	if exist {
-		return res
+func addCheckstyleError(files map[string]*checkstyle.File, bug BugInstance, source SourceLine) {
+	var sourcePath string
+	if filepath.IsAbs(source.SourcePath) {
+		sourcePath = source.SourcePath
+	} else {
+		sourcePath = filepath.Join(opts.BaseDir, source.SourcePath)
 	}
-
-	for _, v := range a.paths {
-		if strings.HasSuffix(v, "/"+relative) {
-			a.cache[relative] = v
-			return v
-		}
-	}
-
-	a.cache[relative] = relative
-	return relative
-}
-
-func addCheckstyleError(pathCache *absolutePathCache, files map[string]*checkstyle.File, bug BugInstance, source SourceLine) {
-	sourcePath := pathCache.find(source.SourcePath)
 
 	file, exist := files[sourcePath]
 	if !exist {
@@ -64,27 +35,34 @@ func addCheckstyleError(pathCache *absolutePathCache, files map[string]*checksty
 }
 
 func main() {
+	_, err := flags.Parse(&opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if opts.BaseDir == "" {
+		opts.BaseDir, _ = os.Getwd()
+	}
+
 	body, _ := ioutil.ReadAll(os.Stdin)
 
 	document := BugCollection{}
 	xml.Unmarshal(body, &document)
 
-	pathCache := newAbsolutePathCache(document.Project.SrcDirs)
-
 	checkstyleFiles := make(map[string]*checkstyle.File)
 
 	for _, bug := range document.BugInstances {
 		for _, source := range bug.ClassSourceLines {
-			addCheckstyleError(pathCache, checkstyleFiles, bug, source)
+			addCheckstyleError(checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.MethodSourceLines {
-			addCheckstyleError(pathCache, checkstyleFiles, bug, source)
+			addCheckstyleError(checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.FieldSourceLines {
-			addCheckstyleError(pathCache, checkstyleFiles, bug, source)
+			addCheckstyleError(checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.SourceLines {
-			addCheckstyleError(pathCache, checkstyleFiles, bug, source)
+			addCheckstyleError(checkstyleFiles, bug, source)
 		}
 	}
 
