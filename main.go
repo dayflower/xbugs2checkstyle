@@ -14,10 +14,11 @@ import (
 )
 
 var opts struct {
-	BaseDir string `short:"b" long:"basedir" description:"base directory"`
+	BaseDir  string `short:"b" long:"basedir" description:"base directory"`
+	Language string `short:"l" long:"lang" description:"language (default: en)"`
 }
 
-func addCheckstyleError(files map[string]*checkstyle.File, bug BugInstance, source SourceLine) {
+func addCheckstyleError(bugDescriptions map[string]string, files map[string]*checkstyle.File, bug BugInstance, source SourceLine) {
 	var sourcePath string
 	if filepath.IsAbs(source.SourcePath) {
 		sourcePath = source.SourcePath
@@ -31,7 +32,9 @@ func addCheckstyleError(files map[string]*checkstyle.File, bug BugInstance, sour
 		files[sourcePath] = file
 	}
 
-	file.AddError(checkstyle.NewError(source.Start, 1, checkstyle.SeverityWarning, bug.Type, bug.Type))
+	message := bug.Type + ": " + bugDescriptions[bug.Type]
+
+	file.AddError(checkstyle.NewError(source.Start, 1, checkstyle.SeverityWarning, message, bug.Type))
 }
 
 func main() {
@@ -44,6 +47,22 @@ func main() {
 		opts.BaseDir, _ = os.Getwd()
 	}
 
+	if opts.Language == "" {
+		opts.Language = "en"
+	}
+
+	var bugDescriptions map[string]string
+	switch opts.Language {
+	case "en":
+		bugDescriptions = BugDescriptionEn
+	case "ja":
+		bugDescriptions = BugDescriptionJa
+	case "fr":
+		bugDescriptions = BugDescriptionFr
+	default:
+		panic("Unsupported language: " + opts.Language)
+	}
+
 	body, _ := ioutil.ReadAll(os.Stdin)
 
 	document := BugCollection{}
@@ -53,16 +72,16 @@ func main() {
 
 	for _, bug := range document.BugInstances {
 		for _, source := range bug.ClassSourceLines {
-			addCheckstyleError(checkstyleFiles, bug, source)
+			addCheckstyleError(bugDescriptions, checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.MethodSourceLines {
-			addCheckstyleError(checkstyleFiles, bug, source)
+			addCheckstyleError(bugDescriptions, checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.FieldSourceLines {
-			addCheckstyleError(checkstyleFiles, bug, source)
+			addCheckstyleError(bugDescriptions, checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.SourceLines {
-			addCheckstyleError(checkstyleFiles, bug, source)
+			addCheckstyleError(bugDescriptions, checkstyleFiles, bug, source)
 		}
 	}
 
