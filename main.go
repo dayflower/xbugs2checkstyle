@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
-	"path/filepath"
+	"strings"
 
 	"github.com/jessevdk/go-flags"
 
@@ -14,17 +15,32 @@ import (
 )
 
 var opts struct {
-	BaseDir  string `short:"b" long:"basedir" description:"base directory"`
 	Language string `short:"l" long:"lang" description:"language (default: en)"`
 }
 
-func addCheckstyleError(bugDescriptions map[string]string, files map[string]*checkstyle.File, bug BugInstance, source SourceLine) {
-	var sourcePath string
-	if filepath.IsAbs(source.SourcePath) {
-		sourcePath = source.SourcePath
-	} else {
-		sourcePath = filepath.Join(opts.BaseDir, source.SourcePath)
+func toAbsPath(srcDirs []string, source string) string {
+	minseps := math.MaxInt32
+	var res string
+
+	for _, dir := range srcDirs {
+		if strings.HasSuffix(dir, string(os.PathSeparator)+source) {
+			seps := strings.Count(dir[0:len(dir)-len(source)-1], string(os.PathSeparator))
+			if seps < minseps {
+				minseps = seps
+				res = dir
+			}
+		}
 	}
+
+	if res != "" {
+		return res
+	} else {
+		return source
+	}
+}
+
+func addCheckstyleError(bugDescriptions map[string]string, srcDirs []string, files map[string]*checkstyle.File, bug BugInstance, source SourceLine) {
+	sourcePath := toAbsPath(srcDirs, source.SourcePath)
 
 	file, exist := files[sourcePath]
 	if !exist {
@@ -41,10 +57,6 @@ func main() {
 	_, err := flags.Parse(&opts)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if opts.BaseDir == "" {
-		opts.BaseDir, _ = os.Getwd()
 	}
 
 	if opts.Language == "" {
@@ -68,20 +80,21 @@ func main() {
 	document := BugCollection{}
 	xml.Unmarshal(body, &document)
 
+	srcDirs := document.Project.SrcDirs
 	checkstyleFiles := make(map[string]*checkstyle.File)
 
 	for _, bug := range document.BugInstances {
 		for _, source := range bug.ClassSourceLines {
-			addCheckstyleError(bugDescriptions, checkstyleFiles, bug, source)
+			addCheckstyleError(bugDescriptions, srcDirs, checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.MethodSourceLines {
-			addCheckstyleError(bugDescriptions, checkstyleFiles, bug, source)
+			addCheckstyleError(bugDescriptions, srcDirs, checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.FieldSourceLines {
-			addCheckstyleError(bugDescriptions, checkstyleFiles, bug, source)
+			addCheckstyleError(bugDescriptions, srcDirs, checkstyleFiles, bug, source)
 		}
 		for _, source := range bug.SourceLines {
-			addCheckstyleError(bugDescriptions, checkstyleFiles, bug, source)
+			addCheckstyleError(bugDescriptions, srcDirs, checkstyleFiles, bug, source)
 		}
 	}
 
