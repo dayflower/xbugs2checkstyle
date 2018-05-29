@@ -86,6 +86,7 @@ func main() {
 	}
 
 	checkstyleResult := checkstyle.New()
+	checkstyleResult.Version = "8.9"
 	for _, file := range checkstyleFiles {
 		checkstyleResult.AddFile(file)
 	}

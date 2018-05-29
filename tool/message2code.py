@@ -23,7 +23,7 @@ print "var %s = map[string]string{" % (args.name)
 
 for e in tree.findall('.//BugPattern'):
   code = e.get('type')
-  desc = ("%s\n\n%s" % (e.findtext('./ShortDescription'), re.sub(r'\n+', '\n', e.findtext('./Details')).strip())).replace('"', '&apos;').replace("\n", '&#10;')
+  desc = ("%s\n\n%s" % (e.findtext('./ShortDescription'), re.sub(r'\n+', "\n", e.findtext('./Details')).strip())).replace('"', '&apos;').replace("\n", '\\n')
 
   print '  "%s":"%s",' % (code, desc)
 
